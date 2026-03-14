@@ -582,25 +582,21 @@
         </a>
 
         <!-- Placeholder for future posts -->
-        <div class="post-card" style="opacity:0.4;pointer-events:none;cursor:default;">
-          <div class="post-meta">
-            <span class="post-date">coming soon</span>
-            <span class="post-tag tag-tools">tools</span>
-          </div>
-          <div class="post-title">Building NuScrape — Why I Wrote My Own Recon Tool</div>
-          <div class="post-excerpt">The open source recon landscape has a gap: everything is single-purpose. Here's why I built a unified crawler, JS analyzer, and vuln scanner from scratch.</div>
-        </div>
-
-        <div class="post-card" style="opacity:0.4;pointer-events:none;cursor:default;">
-          <div class="post-meta">
-            <span class="post-date">coming soon</span>
-            <span class="post-tag tag-vuln">bug bounty</span>
-          </div>
-          <div class="post-title">The GoDaddy IDOR — Finding a Potential Cross-Account Auth Bypass</div>
-          <div class="post-excerpt">NuScrape flagged a UUID-based SSO endpoint in page source on a GoDaddy Managed WordPress site. Here's what IDOR means, why this was worth reporting, and how I verified it responsibly.</div>
-        </div>
-
-      </div>
+	<a href="posts/godaddy-idor.html" class="post-card">
+  <div class="post-meta">
+    <span class="post-date">2026-03-14</span>
+    <span class="post-tag tag-vuln">IDOR</span>
+    <span class="post-tag tag-recon">recon</span>
+  </div>
+  <div class="post-title">Hunting IDORs on GoDaddy Managed WordPress</div>
+  <div class="post-excerpt">
+    NuScrape flagged a UUID-based SSO endpoint exposed in public page source
+    on a GoDaddy Managed WordPress login page. Here's what IDOR means, why
+    this finding is worth reporting, and where responsible research stops.
+  </div>
+  <span class="post-arrow">→</span>
+</a>
+</div>
     </section>
 
     <!-- TOOLS -->
