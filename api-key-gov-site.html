@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How I Found an API Key Exposed on a Federal .gov Site — Colin Cron</title>
+<meta name="description" content="A routine NuScrape crawl turned up an API key in a public JavaScript config file on apprenticeship.gov. Here's the full discovery and disclosure process.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0c0f;
+    --bg2:       #0f1318;
+    --bg3:       #151a21;
+    --border:    #1e2730;
+    --border2:   #263040;
+    --green:     #00c896;
+    --green-dim: #00875f;
+    --text:      #c8d4e0;
+    --text-dim:  #5a6e82;
+    --text-mid:  #8a9eb4;
+    --white:     #eaf2fa;
+    --red:       #ff4d6a;
+    --amber:     #f5a623;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.8;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  nav {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(10, 12, 15, 0.92);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+  }
+
+  nav .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .nav-brand span { color: var(--text-dim); }
+
+  .nav-back {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .nav-back:hover { color: var(--green); }
+
+  /* ── POST HEADER ── */
+  .post-header {
+    padding: 60px 0 40px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .post-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .post-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tag-recon { background: rgba(245,166,35,0.1); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+  .tag-vuln  { background: rgba(255,77,106,0.12); color: var(--red); border: 1px solid rgba(255,77,106,0.2); }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(22px, 4vw, 32px);
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  .post-lede {
+    font-size: 17px;
+    color: var(--text-mid);
+    line-height: 1.8;
+    border-left: 3px solid var(--green-dim);
+    padding-left: 16px;
+    margin-top: 24px;
+  }
+
+  /* ── POST BODY ── */
+  .post-body {
+    padding: 48px 0 64px;
+  }
+
+  .post-body p {
+    margin-bottom: 24px;
+    color: var(--text);
+  }
+
+  .post-body h2 {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--white);
+    margin: 48px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .post-body h2::before {
+    content: '##';
+    color: var(--green-dim);
+    font-size: 12px;
+  }
+
+  .post-body pre {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green-dim);
+    border-radius: 4px;
+    padding: 20px;
+    margin: 24px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .post-body code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--green);
+  }
+
+  .post-body pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+  }
+
+  .callout {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 24px 0;
+    font-size: 14px;
+    color: var(--text-mid);
+  }
+
+  .callout strong {
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .finding-box {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .finding-box .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .finding-box .value {
+    color: var(--amber);
+    word-break: break-all;
+    font-size: 14px;
+  }
+
+  .finding-box .sub {
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  /* ── TAKEAWAYS ── */
+  .takeaways {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    margin: 40px 0;
+  }
+
+  .takeaways h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .takeaways ol {
+    list-style: none;
+    counter-reset: items;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .takeaways li {
+    counter-increment: items;
+    display: flex;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--text-mid);
+    line-height: 1.6;
+  }
+
+  .takeaways li::before {
+    content: counter(items, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green-dim);
+    min-width: 24px;
+    padding-top: 2px;
+  }
+
+  /* ── FOOTER ── */
+  .post-footer {
+    padding: 32px 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .author-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .author-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .author-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--white);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .author-handle {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .post-nav-link {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .post-nav-link:hover {
+    color: var(--green);
+    border-color: var(--green-dim);
+  }
+
+  footer {
+    padding: 32px 0;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+
+  footer p {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  footer a { color: var(--green-dim); text-decoration: none; }
+  footer a:hover { color: var(--green); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a href="../index.html" class="nav-brand">~/colincron<span>$</span></a>
+    <a href="../index.html#posts" class="nav-back">← all posts</a>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap">
+
+    <header class="post-header">
+      <div class="post-meta">
+        <span class="post-date">2026-03-14</span>
+        <span class="post-tag tag-recon">recon</span>
+        <span class="post-tag tag-vuln">disclosure</span>
+      </div>
+      <h1>How I Found an API Key Exposed on a Federal .gov Site</h1>
+      <p class="post-lede">
+        I wasn't looking for anything specific. I was running a routine crawl with a recon tool
+        I've been building called NuScrape, pointed at a government job training site, and it
+        flagged something I almost scrolled past.
+      </p>
+    </header>
+
+    <article class="post-body">
+
+      <p>A string. In a JavaScript file. That looked like an API key. Here's how it happened, what I did about it, and what it means.</p>
+
+      <h2>The Setup</h2>
+
+      <p>NuScrape is a web recon and vulnerability scanner I've been building for authorized red team research and bug bounty work. One of its core features is JavaScript analysis — after it crawls a site, it pulls down every JS file it finds and runs pattern matching against the content looking for things that shouldn't be public. API keys, tokens, credentials, internal endpoints.</p>
+
+      <p>The target was <code>apprenticeship.gov</code>, a U.S. Department of Labor site. I wasn't running an aggressive scan — just a standard crawl with JS analysis enabled.</p>
+
+      <h2>The Finding</h2>
+
+      <p>NuScrape flagged a value in <code>config.js</code>:</p>
+
+      <div class="finding-box">
+        <div class="label">!! HIGH — JS finding: api_key</div>
+        <div class="value">OEDzPHdEzLUCrDiMClKbwb-YasE3hez9bbZswBMKwu0</div>
+        <div class="sub">Source: https://www.apprenticeship.gov/react/static/js/config.js?1772722915</div>
+        <div class="sub">Found at: 10:53:56</div>
+      </div>
+
+      <p>43 characters, base64url encoded. NuScrape classified it as <code>api_key</code>. The file it came from — <code>config.js</code> — is significant. Config files are where developers intentionally put configuration values. Finding something that looks like a key in a config file is a different signal than finding it buried in minified application code.</p>
+
+      <p>The finding was stored in my SQLite database with the source JS URL, the page it was discovered from, and a timestamp.</p>
+
+      <h2>Verifying Without Touching Anything</h2>
+
+      <p>This is the part that matters most, especially on a <code>.gov</code> target.</p>
+
+      <div class="callout">
+        <strong>Legal note</strong>
+        The CFAA (Computer Fraud and Abuse Act) is not something to play with. Even a single authenticated API request using someone else's key — even "just to test if it works" — can cross a legal line. Passive discovery is fine. Active exploitation is not.
+      </div>
+
+      <p>So the goal was to figure out what this key was without using it. First, I looked at the format. It didn't match AWS key patterns (those start with <code>AKIA</code>). It wasn't a JWT — those have two dots separating three base64 segments. The length and encoding were consistent with a Google API key or similar service token.</p>
+
+      <p>Next step was to fetch the config file directly and look at the surrounding context — what variable name it was assigned to, what service the code referenced nearby. That would identify the service without making any authenticated requests.</p>
+
+      <pre>curl -s "https://www.apprenticeship.gov/react/static/js/config.js?1772722915" \
+  | grep -o '.\{80\}OEDzPHdEzLUCrDiMClKbwb.\{80\}'</pre>
+
+      <p>Empty output. The file had already been redeployed. By the time I went to verify, the key was gone from the live site.</p>
+
+      <h2>What the Database Told Me</h2>
+
+      <p>Even though the key was no longer in the live file, NuScrape had already stored the finding with a timestamp. Querying the database:</p>
+
+      <pre>sqlite3 ~/NuScrape/ScrapeDB \
+  "SELECT value, js_url, found_at FROM JSFindings
+   WHERE value LIKE '%OEDzPHdEzLUCrDiMClKbwb%';"</pre>
+
+      <p>The key appeared twice — captured from both <code>config.js</code> and <code>main.js</code> during the same crawl session at 10:53. The cache-busting timestamp in the URLs meant those were the exact file versions NuScrape saw at crawl time.</p>
+
+      <p>The fact that it appeared in both files suggested the config values were being bundled into the main application — a common pattern in React apps where environment variables get compiled into the build output and shipped to the browser.</p>
+
+      <h2>What I Did With It</h2>
+
+      <p>I documented what I had: the key value, the JS files it was found in with versioned URLs, the page it was discovered from, the timestamp of discovery, and the fact that the key was no longer present in live files when I went to verify.</p>
+
+      <p>For <code>.gov</code> sites, CISA has a vulnerability disclosure policy covering federal agencies. The reporting path is either the agency's own disclosure policy at <code>/vulnerability-disclosure-policy</code> or directly through <code>cisa.gov</code>.</p>
+
+      <p>The redeployment suggests someone was already working on the site when I found it — possible the key was already being rotated. But the right move is still to report it, note what you found and when, and let the agency's security team verify whether the key was ever active and whether rotation was handled cleanly.</p>
+
+      <h2>Why This Matters</h2>
+
+      <p>API keys in JavaScript bundles are one of the most common and most preventable exposures in web security. The reason it keeps happening is straightforward: during development, keys get hardcoded for convenience. The code gets committed, the key gets bundled into the frontend build, and it ships to production — where anyone with a browser and five minutes can find it.</p>
+
+      <p>For a government site, even a low-privilege key can be serious depending on what service it accesses. Read access to a database. Quota consumption. A key that authenticates to an internal API not designed to be called from outside.</p>
+
+      <p>The fix is simple: API keys don't belong in frontend code, ever. They belong in server-side environment variables, accessed through a backend the browser never directly touches.</p>
+
+      <div class="takeaways">
+        <h3>// key takeaways</h3>
+        <ol>
+          <li>Context matters more than the finding. A string that looks like an API key is not a confirmed vulnerability — you need to know what service, what permissions, what exposure before you can assess severity.</li>
+          <li>The database is your evidence. Timestamped records from crawl time give you something to reference even after the live site changes.</li>
+          <li>Passive recon has a ceiling. On a <code>.gov</code> target especially, passive discovery is where you stop. Document it, report it, move on.</li>
+          <li>Automated JS analysis catches what manual review misses. The key was in a minified, cache-busted file buried in a build directory — there's no realistic way to catch this class of issue at scale without tooling.</li>
+        </ol>
+      </div>
+
+    </article>
+
+    <div class="post-footer">
+      <div class="author-block">
+        <div class="author-avatar">CC</div>
+        <div>
+          <span class="author-name">Colin Cron</span>
+          <span class="author-handle">github.com/colincron</span>
+        </div>
+      </div>
+      <a href="../index.html#posts" class="post-nav-link">← back to posts</a>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Colin Cron · <a href="https://github.com/colincron">github.com/colincron</a> · All research conducted on authorized targets only.</p>
+  </div>
+</footer>
+
+</body>
+</html>

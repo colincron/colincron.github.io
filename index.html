@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Colin Cron — Security Research</title>
+<meta name="description" content="Security research, recon tooling, and bug bounty writeups by Colin Cron.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0c0f;
+    --bg2:       #0f1318;
+    --bg3:       #151a21;
+    --border:    #1e2730;
+    --border2:   #263040;
+    --green:     #00c896;
+    --green-dim: #00875f;
+    --text:      #c8d4e0;
+    --text-dim:  #5a6e82;
+    --text-mid:  #8a9eb4;
+    --white:     #eaf2fa;
+    --red:       #ff4d6a;
+    --amber:     #f5a623;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── NAV ── */
+  nav {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(10, 12, 15, 0.92);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+  }
+
+  nav .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--green);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+
+  .nav-brand span {
+    color: var(--text-dim);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--green); }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 80px 0 60px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hero-tag::before {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--green);
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+    margin-bottom: 20px;
+    letter-spacing: -0.02em;
+  }
+
+  h1 .cursor {
+    display: inline-block;
+    width: 3px;
+    height: 0.9em;
+    background: var(--green);
+    margin-left: 4px;
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .hero-desc {
+    font-size: 16px;
+    color: var(--text-mid);
+    max-width: 540px;
+    line-height: 1.8;
+    margin-bottom: 32px;
+  }
+
+  .hero-links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: #000;
+    font-weight: 700;
+  }
+
+  .btn-primary:hover { background: #00e0aa; }
+
+  .btn-ghost {
+    border: 1px solid var(--border2);
+    color: var(--text-mid);
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--green-dim);
+    color: var(--green);
+  }
+
+  /* ── STATS BAR ── */
+  .stats {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 48px 0;
+  }
+
+  .stat {
+    flex: 1;
+    padding: 20px 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .stat:last-child { border-right: none; }
+
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--green);
+    display: block;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: var(--mono);
+  }
+
+  /* ── SECTION ── */
+  .section {
+    padding: 56px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  /* ── POST CARDS ── */
+  .post-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .post-card {
+    display: block;
+    text-decoration: none;
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg2);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .post-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--green);
+    transform: scaleY(0);
+    transition: transform 0.2s;
+    transform-origin: bottom;
+  }
+
+  .post-card:hover {
+    border-color: var(--border2);
+    background: var(--bg3);
+    transform: translateX(4px);
+  }
+
+  .post-card:hover::before { transform: scaleY(1); }
+
+  .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .post-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .post-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tag-vuln  { background: rgba(255,77,106,0.12); color: var(--red); border: 1px solid rgba(255,77,106,0.2); }
+  .tag-tools { background: rgba(0,200,150,0.1);   color: var(--green); border: 1px solid rgba(0,200,150,0.2); }
+  .tag-recon { background: rgba(245,166,35,0.1);  color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+
+  .post-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .post-excerpt {
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.6;
+  }
+
+  .post-arrow {
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--text-dim);
+    transition: all 0.2s;
+  }
+
+  .post-card:hover .post-arrow {
+    color: var(--green);
+    transform: translateY(-50%) translateX(4px);
+  }
+
+  /* ── TOOLS SECTION ── */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .tool-card {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg2);
+    text-decoration: none;
+    transition: all 0.2s;
+    display: block;
+  }
+
+  .tool-card:hover {
+    border-color: var(--green-dim);
+    background: var(--bg3);
+  }
+
+  .tool-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 6px;
+  }
+
+  .tool-desc {
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.5;
+  }
+
+  .tool-lang {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── ABOUT ── */
+  .about-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 560px) {
+    .about-grid { grid-template-columns: 1fr; }
+    .stats { flex-direction: column; }
+    .stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .stat:last-child { border-bottom: none; }
+  }
+
+  .about-block {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg2);
+  }
+
+  .about-block h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .about-block p {
+    font-size: 13px;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+
+  .skill-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .skill-list li {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text-mid);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 40px 0;
+    text-align: center;
+  }
+
+  footer p {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  footer a {
+    color: var(--green-dim);
+    text-decoration: none;
+  }
+
+  footer a:hover { color: var(--green); }
+
+  /* ── TERMINAL PROMPT ── */
+  .prompt {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .prompt .dollar { color: var(--green); }
+  .prompt .cmd { color: var(--text); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a href="/" class="nav-brand">~/colincron<span>$</span></a>
+    <ul class="nav-links">
+      <li><a href="#posts">posts</a></li>
+      <li><a href="#tools">tools</a></li>
+      <li><a href="#about">about</a></li>
+      <li><a href="https://github.com/colincron" target="_blank">github</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-tag">Security Research</div>
+      <h1>Colin Cron<span class="cursor"></span></h1>
+      <p class="hero-desc">
+        Bug bounty researcher, tool builder, Army SIGINT veteran. I write about recon,
+        vulnerability research, and the tools I build to do it.
+        Currently building NuScrape — an open source web recon and vuln scanner.
+      </p>
+      <div class="hero-links">
+        <a href="https://github.com/colincron" class="btn btn-primary" target="_blank">github.com/colincron</a>
+        <a href="https://linkedin.com/in/ccron" class="btn btn-ghost" target="_blank">LinkedIn</a>
+        <a href="https://hackerone.com" class="btn btn-ghost" target="_blank">HackerOne</a>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-val">3+</span>
+          <span class="stat-label">Years enterprise IT</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">35S</span>
+          <span class="stat-label">Army SIGINT MOS</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">WGU</span>
+          <span class="stat-label">BSCSIA in progress</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">OSS</span>
+          <span class="stat-label">NuScrape + tooling</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- POSTS -->
+    <section class="section" id="posts">
+      <div class="section-header">
+        <span class="section-label">// writeups</span>
+        <div class="section-line"></div>
+      </div>
+
+      <div class="prompt">
+        <span class="dollar">$ </span>
+        <span class="cmd">ls -lt ~/posts/</span>
+      </div>
+
+      <div class="post-list">
+
+        <a href="posts/api-key-gov-site.html" class="post-card">
+          <div class="post-meta">
+            <span class="post-date">2026-03-14</span>
+            <span class="post-tag tag-recon">recon</span>
+            <span class="post-tag tag-vuln">disclosure</span>
+          </div>
+          <div class="post-title">How I Found an API Key Exposed on a Federal .gov Site</div>
+          <div class="post-excerpt">
+            A routine NuScrape crawl against apprenticeship.gov turned up a base64url-encoded
+            key sitting in a publicly accessible config.js. Here's the full process — from
+            passive discovery to responsible disclosure.
+          </div>
+          <span class="post-arrow">→</span>
+        </a>
+
+        <!-- Placeholder for future posts -->
+        <div class="post-card" style="opacity:0.4;pointer-events:none;cursor:default;">
+          <div class="post-meta">
+            <span class="post-date">coming soon</span>
+            <span class="post-tag tag-tools">tools</span>
+          </div>
+          <div class="post-title">Building NuScrape — Why I Wrote My Own Recon Tool</div>
+          <div class="post-excerpt">The open source recon landscape has a gap: everything is single-purpose. Here's why I built a unified crawler, JS analyzer, and vuln scanner from scratch.</div>
+        </div>
+
+        <div class="post-card" style="opacity:0.4;pointer-events:none;cursor:default;">
+          <div class="post-meta">
+            <span class="post-date">coming soon</span>
+            <span class="post-tag tag-vuln">bug bounty</span>
+          </div>
+          <div class="post-title">The GoDaddy IDOR — Finding a Potential Cross-Account Auth Bypass</div>
+          <div class="post-excerpt">NuScrape flagged a UUID-based SSO endpoint in page source on a GoDaddy Managed WordPress site. Here's what IDOR means, why this was worth reporting, and how I verified it responsibly.</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TOOLS -->
+    <section class="section" id="tools">
+      <div class="section-header">
+        <span class="section-label">// tools</span>
+        <div class="section-line"></div>
+      </div>
+
+      <div class="prompt">
+        <span class="dollar">$ </span>
+        <span class="cmd">cat ~/projects.json | jq '.tools[]'</span>
+      </div>
+
+      <div class="tool-grid">
+        <a href="https://github.com/colincron" class="tool-card" target="_blank">
+          <div class="tool-name">NuScrape</div>
+          <div class="tool-desc">Web recon and vulnerability scanner. Playwright-powered crawling, JS secret extraction, subdomain enumeration, CORS testing, stealth profiles.</div>
+          <div class="tool-lang">Python · Flask · SQLite</div>
+        </a>
+        <a href="https://github.com/colincron" class="tool-card" target="_blank">
+          <div class="tool-name">NetSentinel</div>
+          <div class="tool-desc">Network packet analyzer with real-time threat detection. Identifies SYN scans, ARP spoofing, DNS tunneling, and ICMP floods.</div>
+          <div class="tool-lang">Python · Flask · Scapy</div>
+        </a>
+        <a href="https://github.com/colincron/BS4_Scraper" class="tool-card" target="_blank">
+          <div class="tool-name">BS4 Scraper</div>
+          <div class="tool-desc">BeautifulSoup4 web scraper with PostgreSQL storage and robust error handling.</div>
+          <div class="tool-lang">Python · PostgreSQL</div>
+        </a>
+        <a href="https://github.com/colincron/PocketPoliticsFinal" class="tool-card" target="_blank">
+          <div class="tool-name">Pocket Politics</div>
+          <div class="tool-desc">Web app surfacing elected representatives by user location with secure auth.</div>
+          <div class="tool-lang">Python · Django · SQLite</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="section" id="about">
+      <div class="section-header">
+        <span class="section-label">// about</span>
+        <div class="section-line"></div>
+      </div>
+
+      <div class="about-grid">
+        <div class="about-block">
+          <h3>Background</h3>
+          <p>Army veteran (35S Signals Collector/Analyst, Misawa Japan), 3 years enterprise support at Rocket Mortgage, and a decade of independent IT work. Now focused on offensive security research, bug bounty, and building the tools that make that work possible.</p>
+        </div>
+        <div class="about-block">
+          <h3>Currently</h3>
+          <p>Enrolled in WGU's B.S. Cybersecurity and Information Assurance program. CompTIA Security+ in progress. Actively doing bug bounty research on HackerOne while building NuScrape toward a professional red team tool.</p>
+        </div>
+        <div class="about-block">
+          <h3>Technical stack</h3>
+          <ul class="skill-list">
+            <li>Python</li><li>Flask</li><li>JavaScript</li>
+            <li>Linux</li><li>Burp Suite</li><li>Wireshark</li>
+            <li>Splunk</li><li>Metasploit</li><li>Git</li>
+            <li>SQLite</li><li>Playwright</li><li>Scapy</li>
+          </ul>
+        </div>
+        <div class="about-block">
+          <h3>Contact</h3>
+          <p>
+            Open to bug bounty collaboration, security research discussion, and entry-level pentesting opportunities.<br><br>
+            <a href="mailto:colint.cron@gmail.com" style="color:var(--green);text-decoration:none;font-family:var(--mono);font-size:13px;">colint.cron@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Colin Cron · <a href="https://github.com/colincron">github.com/colincron</a> · All research conducted on authorized targets only.</p>
+  </div>
+</footer>
+
+</body>
+</html>
